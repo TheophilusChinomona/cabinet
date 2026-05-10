@@ -1,5 +1,7 @@
 # Progress
 
+[2026-05-10] Pushed multica-kb.patch to Cabinet's claude/self-hosted-knowledge-base-eY4Vo branch on GitHub (session MCP token is Cabinet-only; Multica push was blocked). Patch applies all 23 KB files to TheophilusChinomona/multica. Apply with: curl -L <patch-url> | git am --3way from the Multica root.
+
 [2026-05-10] Rewrote Cabinet README to reflect the simplified self-hosted knowledge base scope: removed all AI agent, terminal, scheduler, and mission control content; updated feature table, architecture section, and commands to match the current file-tree KB product. Updated `npm run dev` as the sole command.
 
 [2026-05-10] Ported Cabinet's file tree system into Multica fork (TheophilusChinomona/multica) as a self-contained Knowledge Base feature: created storage layer (apps/web/lib/kb/), Next.js route handlers (app/api/kb/), Zustand stores (kb-tree-store, kb-editor-store), KB UI components (sidebar tree, editor wrapper, KB shell), new route (/[workspaceSlug]/kb), sidebar nav item, i18n labels, and KB_DATA_DIR env var. Changes committed on branch claude/self-hosted-knowledge-base-eY4Vo in Multica repo.
