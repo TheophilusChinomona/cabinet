@@ -1,5 +1,7 @@
 # Progress
 
+[2026-05-10] Stripped Cabinet down to a pure self-hosted knowledge base: removed AI agents, terminal, tasks, jobs, AI panel, and registry from the UI layer. Modified app-store.ts (stubs for terminal/AI panel methods, removed task panel and terminal tabs state), app-shell.tsx (removed 9 component imports and renders, replaced SSE with 10s polling, removed onboarding gate), and tree-view.tsx (removed Agents section, Tasks section, agent polling, and all agent-related icons/types). All backend files preserved.
+
 [2026-04-16] Claude Code model labels now include version numbers in the runtime picker ("Claude Opus 4.7", "Claude Sonnet 4.6", "Claude Haiku 4.5"), with Opus listed first.
 
 [2026-04-16] Runtime picker: fixed gap between tabs and model table by wrapping the TabsList in a flex container, eliminating the CSS inline-flex baseline descender space that was adding ~4px below the tab buttons. Inactive tabs now use bg-muted/60 so the active tab stands out clearly.

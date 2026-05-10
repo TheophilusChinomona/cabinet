@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Sidebar } from "@/components/sidebar/sidebar";
 import { Header } from "@/components/layout/header";
 import { KBEditor } from "@/components/editor/editor";
@@ -13,21 +13,12 @@ import { MediaViewer } from "@/components/editor/media-viewer";
 import { MermaidViewer } from "@/components/editor/mermaid-viewer";
 import { FileFallbackViewer } from "@/components/editor/file-fallback-viewer";
 import { HomeScreen } from "@/components/home/home-screen";
-import { AgentsWorkspace } from "@/components/agents/agents-workspace";
-import { JobsManager } from "@/components/jobs/jobs-manager";
-import { TasksBoard } from "@/components/tasks/tasks-board";
 import { SettingsPage } from "@/components/settings/settings-page";
-import { TerminalTabs } from "@/components/terminal/terminal-tabs";
-import { AIPanel } from "@/components/ai-panel/ai-panel";
-import { TaskDetailPanel } from "@/components/tasks/task-detail-panel";
 import { SearchDialog } from "@/components/search/search-dialog";
 import { KeyboardShortcuts } from "@/components/shortcuts/keyboard-shortcuts";
 import { StatusBar } from "@/components/layout/status-bar";
-import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard";
 import { UpdateDialog } from "@/components/layout/update-dialog";
 import { NotificationToasts } from "@/components/layout/notification-toasts";
-import { CabinetView } from "@/components/cabinets/cabinet-view";
-import { RegistryBrowser } from "@/components/registry/registry-browser";
 import { findNodeByPath } from "@/lib/cabinets/tree";
 import { useCabinetUpdate } from "@/hooks/use-cabinet-update";
 import { useHashRoute } from "@/hooks/use-hash-route";
@@ -42,12 +33,8 @@ export function AppShell() {
   const selectedPath = useTreeStore((s) => s.selectedPath);
   const section = useAppStore((s) => s.section);
   const setSection = useAppStore((s) => s.setSection);
-  const terminalOpen = useAppStore((s) => s.terminalOpen);
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed);
   const setSidebarCollapsed = useAppStore((s) => s.setSidebarCollapsed);
-  const setAiPanelCollapsed = useAppStore((s) => s.setAiPanelCollapsed);
-  const aiPanelCollapsed = useAppStore((s) => s.aiPanelCollapsed);
-  const taskPanelConversation = useAppStore((s) => s.taskPanelConversation);
   const {
     update,
     refreshing: updateRefreshing,
@@ -61,11 +48,8 @@ export function AppShell() {
     applyUpdate,
   } = useCabinetUpdate({ autoRefresh: true });
 
-  // Sync navigation state with URL hash + localStorage
   useHashRoute();
 
-  // Onboarding wizard state
-  const [showWizard, setShowWizard] = useState<boolean | null>(null);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
@@ -80,39 +64,11 @@ export function AppShell() {
     loadTree();
   }, [loadTree]);
 
-  // Auto-refresh sidebar when /data changes (detected via SSE)
+  // Poll for tree changes every 10 seconds
   useEffect(() => {
-    let es: EventSource | null = null;
-    try {
-      es = new EventSource("/api/agents/events");
-      es.addEventListener("tree_changed", () => loadTree());
-      es.addEventListener("conversation_completed", (e) => {
-        try {
-          const data = JSON.parse(e.data);
-          window.dispatchEvent(
-            new CustomEvent("cabinet:conversation-completed", { detail: data })
-          );
-        } catch { /* ignore */ }
-      });
-    } catch {
-      // SSE not supported
-    }
-    return () => es?.close();
+    const id = window.setInterval(() => loadTree(), 10_000);
+    return () => window.clearInterval(id);
   }, [loadTree]);
-
-  // Check if company config exists (first-time setup)
-  useEffect(() => {
-    fetch("/api/agents/config")
-      .then((r) => r.json())
-      .then((data) => setShowWizard(!data.exists))
-      .catch(() => setShowWizard(false));
-  }, []);
-
-  const handleWizardComplete = useCallback(() => {
-    setShowWizard(false);
-    setSection({ type: "home" });
-    loadTree();
-  }, [setSection, loadTree]);
 
   function handleUpdateLater() {
     const latestVersion = update?.latest?.version;
@@ -128,7 +84,6 @@ export function AppShell() {
   }
 
   const selectedNode = selectedPath ? findNodeByPath(nodes, selectedPath) : null;
-  // For paths not in the tree (e.g. .agents/ workspace files), infer type from extension
   const inferredType = !selectedNode && selectedPath
     ? selectedPath.endsWith(".csv") ? "csv"
     : selectedPath.endsWith(".pdf") ? "pdf"
@@ -159,70 +114,23 @@ export function AppShell() {
   const effectiveUpdateDialogOpen =
     updateDialogOpen || hasPersistentUpdateState || shouldPromptForUpdate;
 
-  // Auto-collapse sidebar + AI panel when entering app mode
+  // Auto-collapse sidebar when entering fullscreen app mode
   const prevIsApp = useRef(false);
   useEffect(() => {
     if (isApp && !prevIsApp.current) {
       setSidebarCollapsed(true);
-      setAiPanelCollapsed(true);
     }
     prevIsApp.current = !!isApp;
-  }, [isApp, setSidebarCollapsed, setAiPanelCollapsed]);
+  }, [isApp, setSidebarCollapsed]);
 
   const handleExitApp = () => {
     setSidebarCollapsed(false);
-    setAiPanelCollapsed(false);
   };
 
-  // Determine what to render in the main area
   const renderContent = () => {
-    // System sections (non-page views)
     if (section.type === "home") return <HomeScreen />;
-    if (section.type === "registry") return <RegistryBrowser />;
     if (section.type === "settings") return <SettingsPage />;
-    if (section.type === "cabinet" && section.cabinetPath) {
-      return <CabinetView cabinetPath={section.cabinetPath} />;
-    }
-    if (section.type === "agents") {
-      return (
-        <AgentsWorkspace
-          selectedScope="all"
-          selectedAgentSlug={null}
-          cabinetPath={section.cabinetPath}
-          workspaceMode={section.mode}
-        />
-      );
-    }
-    if (section.type === "agent") {
-      return (
-        <AgentsWorkspace
-          selectedScope="agent"
-          selectedAgentSlug={section.slug || null}
-          cabinetPath={section.cabinetPath}
-          workspaceMode={section.mode}
-        />
-      );
-    }
-    if (section.type === "tasks") {
-      return (
-        <TasksBoard
-          cabinetPath={section.cabinetPath}
-          workspaceMode={section.mode}
-        />
-      );
-    }
-    if (section.type === "jobs") {
-      return (
-        <JobsManager
-          cabinetPath={section.cabinetPath}
-          workspaceMode={section.mode}
-        />
-      );
-    }
 
-    // Page-based views (when a KB page is selected)
-    // A cabinet's own markdown can be opened as a data page, so only render
-    // the dashboard when navigation explicitly targets the cabinet section.
     if (isApp && selectedNode) {
       return (
         <WebsiteViewer
@@ -276,20 +184,18 @@ export function AppShell() {
       const mediaTitle = selectedNode?.frontmatter?.title || selectedNode?.name || mediaPath.split("/").pop() || "Media";
       return <MediaViewer path={mediaPath} title={mediaTitle} type={isVideo ? "video" : "audio"} />;
     }
-
     if (isMermaid && (selectedNode || selectedPath)) {
       const mmdPath = selectedNode?.path || selectedPath!;
       const mmdTitle = selectedNode?.frontmatter?.title || selectedNode?.name || mmdPath.split("/").pop() || "Diagram";
       return <MermaidViewer path={mmdPath} title={mmdTitle} />;
     }
-
     if (isUnknown && (selectedNode || selectedPath)) {
       const unkPath = selectedNode?.path || selectedPath!;
       const unkTitle = selectedNode?.frontmatter?.title || selectedNode?.name || unkPath.split("/").pop() || "File";
       return <FileFallbackViewer path={unkPath} title={unkTitle} />;
     }
 
-    // Default: editor
+    // Default: editor (handles page, cabinet, and any unrecognized section)
     return (
       <>
         <Header />
@@ -297,16 +203,6 @@ export function AppShell() {
       </>
     );
   };
-
-  // Show nothing while checking config
-  if (showWizard === null) {
-    return <div className="flex h-screen bg-background" />;
-  }
-
-  // Show onboarding wizard for first-time users
-  if (showWizard) {
-    return <OnboardingWizard onComplete={handleWizardComplete} />;
-  }
 
   return (
     <div className="flex h-screen bg-background text-foreground">
@@ -318,11 +214,8 @@ export function AppShell() {
         <main className="flex-1 flex flex-col overflow-hidden">
           {renderContent()}
         </main>
-        {terminalOpen && <TerminalTabs />}
         <StatusBar />
       </div>
-      {taskPanelConversation && <TaskDetailPanel />}
-      {!aiPanelCollapsed && <AIPanel />}
       <SearchDialog />
       <KeyboardShortcuts />
       <UpdateDialog
